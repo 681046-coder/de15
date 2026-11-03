@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการสต็อกสินค้าคอมพิวเตอร์ (Hardware Inventory)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts: Prompt / Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    },
+                    colors: {
+                        darkbg: '#0b0f19',
+                        cardbg: '#151c2c',
+                        bordercolor: '#232d42',
+                        accent: '#3b82f6',
+                        accentglow: 'rgba(59, 130, 246, 0.15)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: #0b0f19;
+            color: #e2e8f0;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #232d42;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b82f6;
+        }
+        .glow-effect {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+        }
+        .glow-red {
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.25);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col md:flex-row antialiased selection:bg-blue-500 selection:text-white">
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-full md:w-64 bg-cardbg border-r border-bordercolor flex flex-col justify-between shrink-0">
+        <div>
+            <!-- Brand Logo -->
+            <div class="p-5 border-b border-bordercolor flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg text-white leading-tight">TechStock C-Core</h1>
+                    <span class="text-xs text-blue-400 font-mono">v1.2 WebAssembly Ready</span>
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="p-4 space-y-1.5">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 bg-blue-600 text-white shadow-lg shadow-blue-600/20">
+                    <i class="fa-solid fa-chart-pie w-5 text-center"></i>
+                    <span>แดชบอร์ดภาพรวม</span>
+                </button>
+                <button onclick="switchTab('inventory')" id="nav-inventory" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                    <i class="fa-solid fa-boxes-stacked w-5 text-center"></i>
+                    <span>คลังสินค้าทั้งหมด</span>
+                </button>
+                <button onclick="switchTab('transactions')" id="nav-transactions" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                    <i class="fa-solid fa-receipt w-5 text-center"></i>
+                    <span>ประวัติการเข้า-ออก</span>
+                </button>
+                <button onclick="switchTab('c-guide')" id="nav-c-guide" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                    <i class="fa-solid fa-code w-5 text-center"></i>
+                    <span>โค้ด C & GitHub Deploy</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Quick Action Footer -->
+        <div class="p-4 border-t border-bordercolor">
+            <button onclick="openStockModal('in')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 mb-2 shadow-lg shadow-emerald-900/20">
+                <i class="fa-solid fa-plus-circle"></i> นำเข้าสินค้า (Stock In)
+            </button>
+            <button onclick="openStockModal('out')" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-rose-900/20">
+                <i class="fa-solid fa-minus-circle"></i> นำออกสินค้า (Stock Out)
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-screen overflow-y-auto bg-darkbg">
+        
+        <!-- Header Bar -->
+        <header class="bg-cardbg/80 backdrop-blur-md border-b border-bordercolor p-4 px-6 sticky top-0 z-10 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <h2 id="pageTitle" class="text-xl font-bold text-white">แดชบอร์ดสรุปภาพรวม</h2>
+            </div>
+            
+            <!-- Header Badges & Actions -->
+            <div class="flex items-center gap-3">
+                <div id="lowStockBadge" class="hidden cursor-pointer flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs px-3 py-1.5 rounded-full" onclick="switchTab('inventory'); setFilter('low');">
+                    <i class="fa-solid fa-triangle-exclamation animate-pulse"></i>
+                    <span id="lowStockText">มีสินค้าเตือนภัย 0 รายการ</span>
+                </div>
+                <button onclick="resetToDefaultData()" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition">
+                    <i class="fa-solid fa-rotate-left mr-1"></i> รีเซ็ตข้อมูลตัวอย่าง
+                </button>
+            </div>
+        </header>
+
+        <!-- Dynamic View Content -->
+        <div class="p-6 space-y-6 flex-1">
+
+            <!-- TAB 1: DASHBOARD VIEW -->
+            <div id="view-dashboard" class="tab-content space-y-6">
+                <!-- KPI Stats Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div class="bg-cardbg border border-bordercolor rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden">
+                        <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center text-xl shrink-0">
+                            <i class="fa-solid fa-boxes-stacked"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium">รวมชนิดสินค้า</p>
+                            <h3 id="statTotalItems" class="text-2xl font-bold text-white mt-0.5">0</h3>
+                            <p class="text-[11px] text-slate-500 mt-1">รายการสินค้าต่างชนิด</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-cardbg border border-bordercolor rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl shrink-0">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium">รวมจำนวนชิ้นในคลัง</p>
+                            <h3 id="statTotalQuantity" class="text-2xl font-bold text-white mt-0.5">0</h3>
+                            <p class="text-[11px] text-emerald-400 mt-1"><i class="fa-solid fa-check-circle mr-1"></i> สต็อกพร้อมจำหน่าย</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-cardbg border border-bordercolor rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden">
+                        <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center text-xl shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium">สินค้าสต็อกใกล้หมด</p>
+                            <h3 id="statLowStock" class="text-2xl font-bold text-amber-400 mt-0.5">0</h3>
+                            <p class="text-[11px] text-amber-300/80 mt-1">ต่ำกว่าเกณฑ์แจ้งเตือน</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-cardbg border border-bordercolor rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden">
+                        <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl shrink-0">
+                            <i class="fa-solid fa-sack-dollar"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium">มูลค่ารวมในคลัง</p>
+                            <h3 id="statTotalValue" class="text-2xl font-bold text-white mt-0.5">฿0</h3>
+                            <p class="text-[11px] text-indigo-400 mt-1">ประเมินมูลค่าสินค้า</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts & Alerts Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Category Stock Chart -->
+                    <div class="lg:col-span-2 bg-cardbg border border-bordercolor rounded-2xl p-5">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-semibold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-chart-bar text-blue-400"></i> สัดส่วนจำนวนสินค้าแยกตามประเภท
+                            </h3>
+                        </div>
+                        <div class="h-64 relative">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Low Stock Urgent Alerts Widget -->
+                    <div class="bg-cardbg border border-bordercolor rounded-2xl p-5 flex flex-col">
+                        <h3 class="font-semibold text-white flex items-center gap-2 mb-4">
+                            <i class="fa-solid fa-bell text-amber-400 animate-bounce"></i> การแจ้งเตือนด่วน (Low Stock Alert)
+                        </h3>
+                        <div id="urgentAlertsList" class="space-y-3 overflow-y-auto max-h-64 flex-1 pr-1">
+                            <!-- Alert Items Inserted Dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Table -->
+                <div class="bg-cardbg border border-bordercolor rounded-2xl p-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-blue-400"></i> กิจกรรมล่าสุด (Recent Movements)
+                        </h3>
+                        <button onclick="switchTab('transactions')" class="text-xs text-blue-400 hover:text-blue-300">ดูทั้งหมด <i class="fa-solid fa-arrow-right ml-1"></i></button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-400 bg-slate-900/60 uppercase border-b border-bordercolor">
+                                <tr>
+                                    <th class="p-3">เวลา</th>
+                                    <th class="p-3">ประเภท</th>
+                                    <th class="p-3">รายการสินค้า</th>
+                                    <th class="p-3">จำนวน</th>
+                                    <th class="p-3">หมายเหตุ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentTransactionsTable">
+                                <!-- Dynamic Recent Transactions -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: INVENTORY LIST VIEW -->
+            <div id="view-inventory" class="tab-content hidden space-y-5">
+                <!-- Search & Filters -->
+                <div class="bg-cardbg border border-bordercolor rounded-2xl p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div class="relative w-full md:w-80">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+                        <input type="text" id="searchInput" oninput="applyFilters()" placeholder="ค้นหาชื่อสินค้า, SKU, หมวดหมู่..." class="w-full bg-slate-900 border border-bordercolor rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                    </div>
+
+                    <!-- Category Pills Filter -->
+                    <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                        <button onclick="setFilterCategory('ALL')" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white transition" data-cat="ALL">ทั้งหมด</button>
+                        <button onclick="setFilterCategory('CPU')" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white transition" data-cat="CPU">CPU</button>
+                        <button onclick="setFilterCategory('GPU')" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white transition" data-cat="GPU">GPU</button>
+                        <button onclick="setFilterCategory('RAM')" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white transition" data-cat="RAM">RAM</button>
+                        <button onclick="setFilterCategory('SSD/HDD')" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white transition" data-cat="SSD/HDD">Storage</button>
+                        <button onclick="setFilterCategory('Mainboard')" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white transition" data-cat="Mainboard">Mainboard</button>
+                        <button onclick="setFilterCategory('PSU')" class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white transition" data-cat="PSU">PSU</button>
+                    </div>
+
+                    <button onclick="openAddProductModal()" class="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 shrink-0">
+                        <i class="fa-solid fa-plus"></i> เพิ่มสินค้าใหม่
+                    </button>
+                </div>
+
+                <!-- Products Table -->
+                <div class="bg-cardbg border border-bordercolor rounded-2xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-400 bg-slate-900/80 uppercase border-b border-bordercolor">
+                                <tr>
+                                    <th class="p-4">SKU / รูปไอคอน</th>
+                                    <th class="p-4">ชื่อสินค้า</th>
+                                    <th class="p-4">หมวดหมู่</th>
+                                    <th class="p-4">ราคา/หน่วย</th>
+                                    <th class="p-4">จำนวนคงเหลือ</th>
+                                    <th class="p-4">เกณฑ์เตือน (Min)</th>
+                                    <th class="p-4">สถานะ</th>
+                                    <th class="p-4 text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventoryTableBody" class="divide-y divide-bordercolor/50">
+                                <!-- Dynamic Items Table -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: TRANSACTION LOGS VIEW -->
+            <div id="view-transactions" class="tab-content hidden space-y-5">
+                <div class="bg-cardbg border border-bordercolor rounded-2xl p-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 class="font-bold text-white text-lg">ประวัติบันทึกรายการนำเข้า-นำออก</h3>
+                            <p class="text-xs text-slate-400">บันทึกธุรกรรมสต็อกทั้งหมดในระบบ</p>
+                        </div>
+                        <button onclick="clearLogs()" class="text-xs border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 px-3 py-1.5 rounded-lg transition">
+                            <i class="fa-solid fa-trash-can mr-1"></i> ล้างประวัติทั้งหมด
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-400 bg-slate-900/80 uppercase border-b border-bordercolor">
+                                <tr>
+                                    <th class="p-3.5">วัน-เวลา</th>
+                                    <th class="p-3.5">ประเภท</th>
+                                    <th class="p-3.5">SKU / ชื่อสินค้า</th>
+                                    <th class="p-3.5">จำนวนที่เปลี่ยน</th>
+                                    <th class="p-3.5">คงเหลือหลังปรับ</th>
+                                    <th class="p-3.5">เหตุผล / หมายเหตุ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fullTransactionHistory" class="divide-y divide-bordercolor/50">
+                                <!-- Dynamic Full Logs -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: C LANGUAGE & GITHUB DEPLOYMENT GUIDE -->
+            <div id="view-c-guide" class="tab-content hidden space-y-6">
+                <!-- Overview Banner -->
+                <div class="bg-gradient-to-r from-blue-950/60 to-indigo-950/60 border border-blue-800/40 rounded-2xl p-6">
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div>
+                            <span class="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs px-2.5 py-1 rounded-md font-mono">C Embedded Backend Ready</span>
+                            <h3 class="text-xl font-bold text-white mt-2">การเชื่อมต่อกับระบบแกนกลางภาษา C (C Core Integration)</h3>
+                            <p class="text-sm text-slate-300 mt-1 max-w-3xl">
+                                สำหรับความเร็วระดับ High-Performance หรือระบบ IoT Server ขนาดเล็ก ท่านสามารถเขียนโค้ดภาษา C ประมวลผลตรรกะคลังสินค้า และคอมไพล์เป็น WebAssembly (.wasm) เพื่อรันสดบนเว็บ หรือใช้เป็น CGI Backend ได้ ดังรายละเอียดด้านล่าง
+                            </p>
+                        </div>
+                        <a href="https://github.com" target="_blank" class="shrink-0 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm border border-slate-700 flex items-center gap-2">
+                            <i class="fa-brands fa-github text-lg"></i> GitHub Repository
+                        </a>
+                    </div>
+                </div>
+
+                <!-- C Source Code Example Block -->
+                <div class="bg-cardbg border border-bordercolor rounded-2xl p-5">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-code text-emerald-400"></i> โค้ดภาษา C: ระบบจัดการคลังสินค้า (inventory_core.c)
+                        </h4>
+                        <button onclick="copyCCode()" class="text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-copy"></i> คัดลอกโค้ด C
+                        </button>
+                    </div>
+                    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-slate-300 overflow-x-auto border border-bordercolor leading-relaxed"><code id="cCodeBlock">/*
+ * Computer Hardware Inventory Core Engine in C
+ * Author: TechStock Architecture
+ * Compile command for WebAssembly:
+ * emcc inventory_core.c -O3 -s WASM=1 -s EXPORTED_FUNCTIONS="['_stockIn', '_stockOut', '_checkLowStock']" -o inventory.js
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdbool.h&gt;
+
+#define MAX_ITEMS 100
+#define ALERT_THRESHOLD_DEFAULT 5
+
+// โครงสร้างข้อมูลสินค้าคอมพิวเตอร์
+typedef struct {
+    int id;
+    char sku[20];
+    char name[100];
+    char category[30]; // CPU, GPU, RAM, SSD, Mainboard, PSU
+    int quantity;
+    int min_threshold;
+    double price;
+} HardwareItem;
+
+HardwareItem inventory[MAX_ITEMS];
+int item_count = 0;
+
+// ฟังก์ชันนำเข้าสินค้า (Stock In)
+bool stockIn(int item_id, int qty) {
+    for (int i = 0; i < item_count; i++) {
+        if (inventory[i].id == item_id) {
+            inventory[i].quantity += qty;
+            printf("[SUCCESS] Stock In ID %d: +%d units. New Total: %d\n", item_id, qty, inventory[i].quantity);
+            return true;
+        }
+    }
+    printf("[ERROR] Item ID %d not found!\n", item_id);
+    return false;
+}
+
+// ฟังก์ชันนำออกสินค้า (Stock Out) พร้อมตรวจสอบสินค้าหมด
+bool stockOut(int item_id, int qty) {
+    for (int i = 0; i < item_count; i++) {
+        if (inventory[i].id == item_id) {
+            if (inventory[i].quantity < qty) {
+                printf("[ALERT] Insufficient stock for ID %d! Available: %d, Requested: %d\n", item_id, inventory[i].quantity, qty);
+                return false;
+            }
+            inventory[i].quantity -= qty;
+            printf("[SUCCESS] Stock Out ID %d: -%d units. Remaining: %d\n", item_id, qty, inventory[i].quantity);
+            
+            // แจ้งเตือนเมื่อใกล้หมด
+            if (inventory[i].quantity <= inventory[i].min_threshold) {
+                printf("[WARNING] Low Stock Alert for %s (ID: %d)! Only %d left.\n", inventory[i].name, item_id, inventory[i].quantity);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+// ตรวจสอบสินค้าที่ต่ำกว่าเกณฑ์เตือน
+void checkLowStockAlerts() {
+    printf("\n=== CRITICAL LOW STOCK REPORT ===\n");
+    int alert_count = 0;
+    for (int i = 0; i < item_count; i++) {
+        if (inventory[i].quantity <= inventory[i].min_threshold) {
+            printf("- [SKU: %s] %s | Current: %d (Min Limit: %d)\n", 
+                   inventory[i].sku, inventory[i].name, inventory[i].quantity, inventory[i].min_threshold);
+            alert_count++;
+        }
+    }
+    if(alert_count == 0) printf("All hardware stocks are sufficient.\n");
+}
+
+int main() {
+    printf("Hardware Inventory C Engine Initialized.\n");
+    return 0;
+}</code></pre>
+                </div>
+
+                <!-- GitHub Deployment Guide -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-cardbg border border-bordercolor rounded-2xl p-5 space-y-3">
+                        <h4 class="font-semibold text-white flex items-center gap-2 border-b border-bordercolor pb-3">
+                            <i class="fa-brands fa-github text-purple-400"></i> ขั้นตอนการ Publish ขึ้น GitHub Pages
+                        </h4>
+                        <ol class="list-decimal list-inside space-y-2.5 text-xs text-slate-300">
+                            <li>สร้าง Repository ใหม่ใน GitHub ตั้งชื่อ เช่น <code class="bg-slate-900 px-1.5 py-0.5 rounded text-blue-400">hardware-inventory-system</code></li>
+                            <li>อัปโหลดไฟล์ <code class="bg-slate-900 px-1.5 py-0.5 rounded text-emerald-400">index.html</code> นี้ไว้ที่ Root Directory ของ Repository</li>
+                            <li>ไปที่เมนู **Settings** -> **Pages** ใน Repository ของคุณ</li>
+                            <li>ตรงหัวข้อ **Source** เลือก **Deploy from a branch** แล้วเลือก Branch <code class="bg-slate-900 px-1.5 py-0.5 rounded text-amber-400">main</code> (หรือ master) / root แล้วกด **Save**</li>
+                            <li>รอประมาณ 1-2 นาที ระบบจะมอบ URL ให้ เช่น <br><code class="text-blue-400 underline">https://yourusername.github.io/hardware-inventory-system/</code></li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-cardbg border border-bordercolor rounded-2xl p-5 space-y-3">
+                        <h4 class="font-semibold text-white flex items-center gap-2 border-b border-bordercolor pb-3">
+                            <i class="fa-solid fa-gears text-blue-400"></i> CI/CD ด้วย GitHub Actions (อัตโนมัติ)
+                        </h4>
+                        <p class="text-xs text-slate-300">
+                            หากต้องการคอมไพล์ C Code อัตโนมัติด้วย Emscripten แล้ว Deploy WebAssembly ลง GitHub Pages ให้สร้างไฟล์ <code class="text-emerald-400 font-mono">.github/workflows/deploy.yml</code>:
+                        </p>
+                        <pre class="bg-slate-950 p-3 rounded-xl text-[11px] font-mono text-slate-400 overflow-x-auto border border-bordercolor">name: Deploy Inventory WebAssembly
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v12
+      - name: Compile C to WASM
+        run: emcc inventory_core.c -O3 -o build/inventory.js
+      - name: Deploy Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build</pre>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- MODAL 1: ADD PRODUCT -->
+    <div id="addProductModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-cardbg border border-bordercolor rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+            <div class="p-5 border-b border-bordercolor flex justify-between items-center">
+                <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-square-plus text-blue-500"></i> เพิ่มสินค้าคอมพิวเตอร์ใหม่
+                </h3>
+                <button onclick="closeModal('addProductModal')" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="addProductForm" onsubmit="handleAddProduct(event)" class="p-5 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">รหัส SKU *</label>
+                        <input type="text" id="addSku" required placeholder="เช่น CPU-INT-001" class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">หมวดหมู่ *</label>
+                        <select id="addCategory" required class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <option value="CPU">CPU (ซีพียู)</option>
+                            <option value="GPU">GPU (การ์ดจอ)</option>
+                            <option value="RAM">RAM (หน่วยความจำ)</option>
+                            <option value="SSD/HDD">SSD / HDD (ไดรฟ์เก็บข้อมูล)</option>
+                            <option value="Mainboard">Mainboard (เมนบอร์ด)</option>
+                            <option value="PSU">PSU (พาวเวอร์ซัพพลาย)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">ชื่อสินค้าคอมพิวเตอร์ *</label>
+                    <input type="text" id="addName" required placeholder="เช่น Intel Core i7-14700K" class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">ราคาต่อหน่วย (บาท)</label>
+                        <input type="number" id="addPrice" min="0" required placeholder="0" class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">จำนวนเริ่มต้น</label>
+                        <input type="number" id="addQuantity" min="0" required placeholder="0" class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">เกณฑ์เตือนใกล้หมด</label>
+                        <input type="number" id="addMin" min="1" value="5" required class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t border-bordercolor">
+                    <button type="button" onclick="closeModal('addProductModal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:bg-slate-800">ยกเลิก</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl text-xs font-medium transition shadow-lg shadow-blue-600/20">บันทึกสินค้า</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: STOCK IN / STOCK OUT -->
+    <div id="stockActionModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-cardbg border border-bordercolor rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div id="stockModalHeader" class="p-5 border-b border-bordercolor flex justify-between items-center bg-emerald-950/40">
+                <h3 id="stockModalTitle" class="font-bold text-white text-lg flex items-center gap-2">
+                    <!-- Title dynamically populated -->
+                </h3>
+                <button onclick="closeModal('stockActionModal')" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="stockActionForm" onsubmit="handleStockActionSubmit(event)" class="p-5 space-y-4">
+                <input type="hidden" id="stockActionType" value="in">
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">เลือกรายการสินค้า *</label>
+                    <select id="stockItemSelect" required class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                        <!-- Options generated dynamically -->
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">จำนวนที่ต้องการปรับปรุง *</label>
+                    <input type="number" id="stockActionQty" min="1" value="1" required class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">เหตุผล / หมายเหตุ (เช่น รับเข้าจากซัพพลายเออร์, ขายให้ลูกค้า, เคลมประกัน)</label>
+                    <input type="text" id="stockActionNote" placeholder="ระบุเหตุผลเบื้องต้น..." class="w-full bg-slate-900 border border-bordercolor rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t border-bordercolor">
+                    <button type="button" onclick="closeModal('stockActionModal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:bg-slate-800">ยกเลิก</button>
+                    <button type="submit" id="stockSubmitBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-medium transition">ยืนยันทำรายการ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // Initial Mock Computer Hardware Data
+        const initialProducts = [
+            { id: 101, sku: 'CPU-INT-14900K', name: 'Intel Core i9-14900K Processor', category: 'CPU', price: 23500, quantity: 12, minThreshold: 5 },
+            { id: 102, sku: 'CPU-AMD-7800X3D', name: 'AMD Ryzen 7 7800X3D Desktop Processor', category: 'CPU', price: 15900, quantity: 3, minThreshold: 5 },
+            { id: 103, sku: 'GPU-NV-4090-24G', name: 'NVIDIA GeForce RTX 4090 24GB GDDR6X', category: 'GPU', price: 68900, quantity: 2, minThreshold: 4 },
+            { id: 104, sku: 'GPU-NV-4070S-12G', name: 'ASUS Dual GeForce RTX 4070 SUPER 12GB', category: 'GPU', price: 23900, quantity: 15, minThreshold: 5 },
+            { id: 105, sku: 'RAM-COR-32G-DDR5', name: 'Corsair Vengeance RGB 32GB (2x16GB) DDR5 6000MHz', category: 'RAM', price: 4990, quantity: 25, minThreshold: 8 },
+            { id: 106, sku: 'SSD-SAM-990P-2TB', name: 'Samsung 990 PRO NVMe M.2 SSD 2TB', category: 'SSD/HDD', price: 6790, quantity: 4, minThreshold: 6 },
+            { id: 107, sku: 'MB-ASUS-Z790F', name: 'ASUS ROG STRIX Z790-F GAMING WIFI', category: 'Mainboard', price: 14500, quantity: 8, minThreshold: 3 },
+            { id: 108, sku: 'PSU-COR-RM1000X', name: 'Corsair RM1000x 1000W 80 PLUS Gold Fully Modular', category: 'PSU', price: 6890, quantity: 1, minThreshold: 4 }
+        ];
+
+        const initialTransactions = [
+            { id: 'TX-9001', time: new Date(Date.now() - 3600000*5).toLocaleString('th-TH'), type: 'IN', sku: 'CPU-INT-14900K', name: 'Intel Core i9-14900K Processor', change: 5, remaining: 12, note: 'รับสินค้าจากซัพพลายเออร์ Lot #A4' },
+            { id: 'TX-9002', time: new Date(Date.now() - 3600000*2).toLocaleString('th-TH'), type: 'OUT', sku: 'GPU-NV-4090-24G', name: 'NVIDIA GeForce RTX 4090 24GB GDDR6X', change: 1, remaining: 2, note: 'เบิกประกอบเครื่องคอมชุดประกอบ' }
+        ];
+
+        // State Management
+        let products = JSON.parse(localStorage.getItem('techstock_products')) || initialProducts;
+        let transactions = JSON.parse(localStorage.getItem('techstock_tx')) || initialTransactions;
+        let currentFilterCategory = 'ALL';
+        let chartInstance = null;
+
+        // Initialize App
+        window.onload = function() {
+            renderDashboard();
+            renderInventoryTable();
+            renderTransactions();
+            initChart();
+        };
+
+        // Save State
+        function saveData() {
+            localStorage.setItem('techstock_products', JSON.stringify(products));
+            localStorage.setItem('techstock_tx', JSON.stringify(transactions));
+        }
+
+        function resetToDefaultData() {
+            products = JSON.parse(JSON.stringify(initialProducts));
+            transactions = JSON.parse(JSON.stringify(initialTransactions));
+            saveData();
+            refreshAllViews();
+            showToast('รีเซ็ตข้อมูลตัวอย่างเรียบร้อยแล้ว', 'info');
+        }
+
+        // Tab Navigation Logic
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/20');
+                btn.classList.add('text-slate-400', 'hover:text-white');
+            });
+
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+            const activeNav = document.getElementById(`nav-${tabId}`);
+            activeNav.classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/20');
+            activeNav.classList.remove('text-slate-400');
+
+            const titleMap = {
+                'dashboard': 'แดชบอร์ดสรุปภาพรวม',
+                'inventory': 'รายการคลังสินค้าทั้งหมด',
+                'transactions': 'ประวัติการเข้า-ออกของสินค้า',
+                'c-guide': 'การเชื่อมต่อ C Engine & GitHub Pages Deployment'
+            };
+            document.getElementById('pageTitle').innerText = titleMap[tabId];
+
+            if(tabId === 'dashboard') {
+                updateChart();
+            }
+        }
+
+        // Render Dashboard Stats & Alerts
+        function renderDashboard() {
+            const totalItems = products.length;
+            const totalQty = products.reduce((acc, p) => acc + p.quantity, 0);
+            const totalVal = products.reduce((acc, p) => acc + (p.quantity * p.price), 0);
+            const lowStockProducts = products.filter(p => p.quantity <= p.minThreshold);
+
+            document.getElementById('statTotalItems').innerText = totalItems.toLocaleString('th-TH');
+            document.getElementById('statTotalQuantity').innerText = totalQty.toLocaleString('th-TH');
+            document.getElementById('statLowStock').innerText = lowStockProducts.length.toLocaleString('th-TH');
+            document.getElementById('statTotalValue').innerText = '฿' + totalVal.toLocaleString('th-TH');
+
+            // Header Low Stock Badge Update
+            const lowBadge = document.getElementById('lowStockBadge');
+            if (lowStockProducts.length > 0) {
+                lowBadge.classList.remove('hidden');
+                document.getElementById('lowStockText').innerText = `มีสินค้าเตือนภัย ${lowStockProducts.length} รายการ`;
+            } else {
+                lowBadge.classList.add('hidden');
+            }
+
+            // Urgent Alerts Widget
+            const alertListContainer = document.getElementById('urgentAlertsList');
+            alertListContainer.innerHTML = '';
+
+            if (lowStockProducts.length === 0) {
+                alertListContainer.innerHTML = `
+                    <div class="text-center py-8 text-slate-500 text-xs">
+                        <i class="fa-solid fa-circle-check text-2xl text-emerald-500 mb-2 block"></i>
+                        สินค้าทุกรายการมีจำนวนเพียงพอ
+                    </div>
+                `;
+            } else {
+                lowStockProducts.forEach(prod => {
+                    const isOutOfStock = prod.quantity === 0;
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = `p-3 rounded-xl border flex items-center justify-between ${
+                        isOutOfStock 
+                            ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' 
+                            : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                    }`;
+                    alertDiv.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid ${isOutOfStock ? 'fa-circle-xmark text-rose-500' : 'fa-triangle-exclamation text-amber-500'} text-lg"></i>
+                            <div>
+                                <h4 class="font-medium text-xs text-white">${escapeHtml(prod.name)}</h4>
+                                <span class="text-[10px] opacity-80 font-mono">SKU: ${prod.sku}</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs font-bold ${isOutOfStock ? 'text-rose-400' : 'text-amber-400'}">
+                                ${isOutOfStock ? 'หมดสต็อก (0)' : `เหลือ ${prod.quantity} ชิ้น`}
+                            </span>
+                            <span class="block text-[10px] text-slate-400">เกณฑ์: ${prod.minThreshold}</span>
+                        </div>
+                    `;
+                    alertListContainer.appendChild(alertDiv);
+                });
+            }
+
+            // Recent Movements Dashboard Table (Top 5)
+            const recentTbody = document.getElementById('recentTransactionsTable');
+            recentTbody.innerHTML = '';
+            const recentLogs = transactions.slice(0, 5);
+
+            if(recentLogs.length === 0) {
+                recentTbody.innerHTML = `<tr><td colspan="5" class="text-center p-4 text-slate-500 text-xs">ยังไม่มีรายการบันทึกล่าสุด</td></tr>`;
+            } else {
+                recentLogs.forEach(tx => {
+                    const row = document.createElement('tr');
+                    row.className = "border-b border-bordercolor/40 hover:bg-slate-900/40";
+                    const isStockIn = tx.type === 'IN';
+                    row.innerHTML = `
+                        <td class="p-3 text-slate-400 text-xs">${tx.time}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isStockIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}">
+                                ${isStockIn ? '+ นำเข้า' : '- นำออก'}
+                            </span>
+                        </td>
+                        <td class="p-3 font-medium text-white">${escapeHtml(tx.name)}</td>
+                        <td class="p-3 font-bold ${isStockIn ? 'text-emerald-400' : 'text-rose-400'}">${isStockIn ? '+' : '-'}${tx.change}</td>
+                        <td class="p-3 text-slate-400 text-xs">${escapeHtml(tx.note || '-')}</td>
+                    `;
+                    recentTbody.appendChild(row);
+                });
+            }
+        }
+
+        // Render Inventory Table
+        function renderInventoryTable() {
+            const tbody = document.getElementById('inventoryTableBody');
+            tbody.innerHTML = '';
+
+            const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+
+            const filteredProducts = products.filter(item => {
+                const matchesCategory = (currentFilterCategory === 'ALL' || item.category === currentFilterCategory);
+                const matchesSearch = item.name.toLowerCase().includes(searchTerm) || 
+                                      item.sku.toLowerCase().includes(searchTerm) ||
+                                      item.category.toLowerCase().includes(searchTerm);
+                return matchesCategory && matchesSearch;
+            });
+
+            if (filteredProducts.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-10 text-slate-500">
+                            <i class="fa-solid fa-box-open text-3xl mb-2 block"></i>
+                            ไม่พบรายการสินค้าที่ค้นหา
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            filteredProducts.forEach(item => {
+                const isLow = item.quantity <= item.minThreshold && item.quantity > 0;
+                const isOut = item.quantity === 0;
+
+                let statusBadge = `<span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">ปกติ</span>`;
+                if (isOut) {
+                    statusBadge = `<span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse">หมดสต็อก</span>`;
+                } else if (isLow) {
+                    statusBadge = `<span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">ใกล้หมด</span>`;
+                }
+
+                const catIconMap = {
+                    'CPU': 'fa-microchip text-blue-400',
+                    'GPU': 'fa-tv text-purple-400',
+                    'RAM': 'fa-memory text-emerald-400',
+                    'SSD/HDD': 'fa-hard-drive text-amber-400',
+                    'Mainboard': 'fa-circuit-board text-indigo-400',
+                    'PSU': 'fa-plug text-rose-400'
+                };
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-900/60 transition border-b border-bordercolor/50";
+                tr.innerHTML = `
+                    <td class="p-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-slate-900 border border-bordercolor flex items-center justify-center">
+                                <i class="fa-solid ${catIconMap[item.category] || 'fa-box'} text-base"></i>
+                            </div>
+                            <span class="font-mono text-xs text-blue-400 font-semibold">${escapeHtml(item.sku)}</span>
+                        </div>
+                    </td>
+                    <td class="p-4 font-medium text-white">${escapeHtml(item.name)}</td>
+                    <td class="p-4 text-xs text-slate-300">
+                        <span class="bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">${escapeHtml(item.category)}</span>
+                    </td>
+                    <td class="p-4 font-mono text-slate-200">฿${item.price.toLocaleString('th-TH')}</td>
+                    <td class="p-4">
+                        <span class="text-base font-bold ${isOut ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-white'}">
+                            ${item.quantity.toLocaleString('th-TH')}
+                        </span>
+                    </td>
+                    <td class="p-4 text-xs text-slate-400 font-mono">${item.minThreshold}</td>
+                    <td class="p-4">${statusBadge}</td>
+                    <td class="p-4 text-center">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <button onclick="quickAdjustStock(${item.id}, 'in')" title="นำเข้าเพิ่ม" class="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xs transition">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                            <button onclick="quickAdjustStock(${item.id}, 'out')" title="นำออก" class="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center text-xs transition">
+                                <i class="fa-solid fa-minus"></i>
+                            </button>
+                            <button onclick="deleteProduct(${item.id})" title="ลบสินค้า" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 border border-slate-700 flex items-center justify-center text-xs transition ml-1">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Render Transactions Log Table
+        function renderTransactions() {
+            const tbody = document.getElementById('fullTransactionHistory');
+            tbody.innerHTML = '';
+
+            if (transactions.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500">ไม่มีประวัติการทำรายการในระบบ</td></tr>`;
+                return;
+            }
+
+            transactions.forEach(tx => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-900/60 border-b border-bordercolor/50 text-xs";
+                const isStockIn = tx.type === 'IN';
+                tr.innerHTML = `
+                    <td class="p-3.5 text-slate-400 font-mono">${tx.time}</td>
+                    <td class="p-3.5">
+                        <span class="px-2.5 py-1 rounded-md font-bold ${isStockIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}">
+                            ${isStockIn ? '<i class="fa-solid fa-arrow-down mr-1"></i> นำเข้า (Stock In)' : '<i class="fa-solid fa-arrow-up mr-1"></i> นำออก (Stock Out)'}
+                        </span>
+                    </td>
+                    <td class="p-3.5">
+                        <span class="font-mono text-blue-400 font-semibold block">${escapeHtml(tx.sku)}</span>
+                        <span class="text-white font-medium">${escapeHtml(tx.name)}</span>
+                    </td>
+                    <td class="p-3.5 font-bold text-sm ${isStockIn ? 'text-emerald-400' : 'text-rose-400'}">
+                        ${isStockIn ? '+' : '-'}${tx.change}
+                    </td>
+                    <td class="p-3.5 font-mono text-slate-300">${tx.remaining} ชิ้น</td>
+                    <td class="p-3.5 text-slate-400">${escapeHtml(tx.note || '-')}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Category Filter Pills Handler
+        function setFilterCategory(cat) {
+            currentFilterCategory = cat;
+            document.querySelectorAll('.cat-pill').forEach(btn => {
+                if (btn.dataset.cat === cat) {
+                    btn.className = "cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white transition";
+                } else {
+                    btn.className = "cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white transition";
+                }
+            });
+            renderInventoryTable();
+        }
+
+        function applyFilters() {
+            renderInventoryTable();
+        }
+
+        // Modal Controls
+        function openAddProductModal() {
+            document.getElementById('addProductForm').reset();
+            document.getElementById('addProductModal').classList.remove('hidden');
+        }
+
+        function openStockModal(actionType, targetItemId = null) {
+            const select = document.getElementById('stockItemSelect');
+            select.innerHTML = '';
+            
+            products.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = `[${p.sku}] ${p.name} (คงเหลือ: ${p.quantity})`;
+                if(targetItemId && p.id === targetItemId) opt.selected = true;
+                select.appendChild(opt);
+            });
+
+            const isStockIn = actionType === 'in';
+            document.getElementById('stockActionType').value = actionType;
+            document.getElementById('stockModalTitle').innerHTML = isStockIn 
+                ? `<i class="fa-solid fa-plus-circle text-emerald-400"></i> นำเข้าสินค้าคอมพิวเตอร์ (Stock In)` 
+                : `<i class="fa-solid fa-minus-circle text-rose-400"></i> นำออกสินค้าคอมพิวเตอร์ (Stock Out)`;
+            
+            const submitBtn = document.getElementById('stockSubmitBtn');
+            submitBtn.className = isStockIn 
+                ? "bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-medium transition" 
+                : "bg-rose-600 hover:bg-rose-500 text-white px-5 py-2 rounded-xl text-xs font-medium transition";
+            submitBtn.innerText = isStockIn ? "บันทึกการนำเข้า" : "บันทึกการนำออก";
+
+            document.getElementById('stockModalHeader').className = `p-5 border-b border-bordercolor flex justify-between items-center ${isStockIn ? 'bg-emerald-950/40' : 'bg-rose-950/40'}`;
+
+            document.getElementById('stockActionModal').classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        // Add Product Form Submit
+        function handleAddProduct(e) {
+            e.preventDefault();
+            const sku = document.getElementById('addSku').value.trim();
+            const category = document.getElementById('addCategory').value;
+            const name = document.getElementById('addName').value.trim();
+            const price = parseFloat(document.getElementById('addPrice').value) || 0;
+            const quantity = parseInt(document.getElementById('addQuantity').value) || 0;
+            const minThreshold = parseInt(document.getElementById('addMin').value) || 5;
+
+            // Check SKU Duplicate
+            if(products.some(p => p.sku.toUpperCase() === sku.toUpperCase())) {
+                showToast(`รหัส SKU '${sku}' มีในระบบแล้ว!`, 'error');
+                return;
+            }
+
+            const newProduct = {
+                id: Date.now(),
+                sku: sku.toUpperCase(),
+                name,
+                category,
+                price,
+                quantity,
+                minThreshold
+            };
+
+            products.push(newProduct);
+
+            // Log initial transaction if qty > 0
+            if (quantity > 0) {
+                transactions.unshift({
+                    id: 'TX-' + Math.floor(1000 + Math.random() * 9000),
+                    time: new Date().toLocaleString('th-TH'),
+                    type: 'IN',
+                    sku: newProduct.sku,
+                    name: newProduct.name,
+                    change: quantity,
+                    remaining: quantity,
+                    note: 'สินค้าสร้างใหม่เข้าคลัง'
+                });
+            }
+
+            saveData();
+            refreshAllViews();
+            closeModal('addProductModal');
+            showToast(`เพิ่มสินค้า '${name}' เรียบร้อยแล้ว`, 'success');
+        }
+
+        // Handle Stock In / Stock Out Action
+        function handleStockActionSubmit(e) {
+            e.preventDefault();
+            const actionType = document.getElementById('stockActionType').value;
+            const itemId = parseInt(document.getElementById('stockItemSelect').value);
+            const qty = parseInt(document.getElementById('stockActionQty').value);
+            const note = document.getElementById('stockActionNote').value.trim();
+
+            const product = products.find(p => p.id === itemId);
+            if (!product) return;
+
+            if (actionType === 'out') {
+                if (product.quantity < qty) {
+                    showToast(`จำนวนสินค้าคงเหลือไม่พอ! (มีคงเหลือเพียง ${product.quantity} ชิ้น)`, 'error');
+                    return;
+                }
+                product.quantity -= qty;
+            } else {
+                product.quantity += qty;
+            }
+
+            // Record Log
+            transactions.unshift({
+                id: 'TX-' + Math.floor(1000 + Math.random() * 9000),
+                time: new Date().toLocaleString('th-TH'),
+                type: actionType === 'in' ? 'IN' : 'OUT',
+                sku: product.sku,
+                name: product.name,
+                change: qty,
+                remaining: product.quantity,
+                note: note || (actionType === 'in' ? 'นำเข้าปกติ' : 'นำออกปกติ')
+            });
+
+            saveData();
+            refreshAllViews();
+            closeModal('stockActionModal');
+
+            // Trigger Notification for Stock Alert
+            if (actionType === 'out') {
+                if (product.quantity === 0) {
+                    showToast(`🚨 สินค้า '${product.name}' หมดสต็อกแล้ว!`, 'error');
+                } else if (product.quantity <= product.minThreshold) {
+                    showToast(`⚠️ สินค้า '${product.name}' ใกล้หมดสต็อก! (เหลือ ${product.quantity} ชิ้น)`, 'warning');
+                } else {
+                    showToast(`นำออกสินค้า '${product.name}' จำนวน ${qty} ชิ้น เรียบร้อยแล้ว`, 'success');
+                }
+            } else {
+                showToast(`นำเข้าสินค้า '${product.name}' เพิ่ม ${qty} ชิ้น เรียบร้อยแล้ว`, 'success');
+            }
+        }
+
+        function quickAdjustStock(id, type) {
+            openStockModal(type, id);
+        }
+
+        function deleteProduct(id) {
+            const product = products.find(p => p.id === id);
+            if (!product) return;
+
+            if (confirm(`คุณต้องการลบสินค้า '${product.name}' [${product.sku}] ใช่หรือไม่?`)) {
+                products = products.filter(p => p.id !== id);
+                saveData();
+                refreshAllViews();
+                showToast(`ลบรายการสินค้าเรียบร้อยแล้ว`, 'info');
+            }
+        }
+
+        function clearLogs() {
+            if (confirm('คุณต้องการล้างประวัติการทำรายการทั้งหมดใช่หรือไม่?')) {
+                transactions = [];
+                saveData();
+                refreshAllViews();
+                showToast('ล้างประวัติเรียบร้อยแล้ว', 'info');
+            }
+        }
+
+        function refreshAllViews() {
+            renderDashboard();
+            renderInventoryTable();
+            renderTransactions();
+            updateChart();
+        }
+
+        // Chart.js Category Distribution
+        function initChart() {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: getChartData(),
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#232d42' },
+                            ticks: { color: '#94a3b8', font: { family: 'Prompt' } }
+                        },
+                        y: {
+                            grid: { color: '#232d42' },
+                            ticks: { color: '#94a3b8', font: { family: 'Prompt' } },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function getChartData() {
+            const categories = ['CPU', 'GPU', 'RAM', 'SSD/HDD', 'Mainboard', 'PSU'];
+            const counts = categories.map(cat => {
+                return products.filter(p => p.category === cat).reduce((sum, p) => sum + p.quantity, 0);
+            });
+
+            return {
+                labels: categories,
+                datasets: [{
+                    label: 'จำนวนสินค้าคงเหลือ (ชิ้น)',
+                    data: counts,
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.7)',
+                        'rgba(168, 85, 247, 0.7)',
+                        'rgba(16, 185, 129, 0.7)',
+                        'rgba(245, 158, 11, 0.7)',
+                        'rgba(99, 102, 241, 0.7)',
+                        'rgba(244, 63, 94, 0.7)'
+                    ],
+                    borderColor: [
+                        '#3b82f6',
+                        '#a855f7',
+                        '#10b981',
+                        '#f59e0b',
+                        '#6366f1',
+                        '#f43f5e'
+                    ],
+                    borderWidth: 1.5,
+                    borderRadius: 8
+                }]
+            };
+        }
+
+        function updateChart() {
+            if (chartInstance) {
+                chartInstance.data = getChartData();
+                chartInstance.update();
+            }
+        }
+
+        // Toast Alert Generator
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            const typeConfig = {
+                'success': { bg: 'bg-emerald-950 border-emerald-500/50 text-emerald-300', icon: 'fa-circle-check text-emerald-400' },
+                'error': { bg: 'bg-rose-950 border-rose-500/50 text-rose-300', icon: 'fa-circle-exclamation text-rose-400' },
+                'warning': { bg: 'bg-amber-950 border-amber-500/50 text-amber-300', icon: 'fa-triangle-exclamation text-amber-400' },
+                'info': { bg: 'bg-blue-950 border-blue-500/50 text-blue-300', icon: 'fa-info-circle text-blue-400' }
+            };
+
+            const config = typeConfig[type] || typeConfig['info'];
+
+            toast.className = `pointer-events-auto p-4 rounded-xl border ${config.bg} shadow-2xl flex items-center gap-3 transform transition-all duration-300 translate-y-2 opacity-0`;
+            toast.innerHTML = `
+                <i class="fa-solid ${config.icon} text-lg shrink-0"></i>
+                <p class="text-xs font-medium flex-1">${escapeHtml(message)}</p>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Copy Code Helper
+        function copyCCode() {
+            const codeText = document.getElementById('cCodeBlock').innerText;
+            const textarea = document.createElement('textarea');
+            textarea.value = codeText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showToast('คัดลอกโค้ด C สำเร็จแล้ว', 'success');
+        }
+
+        // HTML Escaper for Safety
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
